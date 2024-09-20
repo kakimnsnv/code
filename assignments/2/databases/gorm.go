@@ -8,31 +8,43 @@ import (
 	"gorm.io/gorm"
 )
 
-func ConnectGorm() (*gorm.DB, error) {
-	connstr := "user=kakimbekn dbname=golang-kbtu password=Sadasa@2015 host=localhost sslmode=disable"
-	db, err := gorm.Open(postgres.Open(connstr), &gorm.Config{})
+var dbGORM *gorm.DB
+
+func ConnectGORM() *gorm.DB {
+	dsn := "user=kakimbekn dbname=golang-kbtu password=Sadasa@2015 host=localhost sslmode=disable"
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		log.Printf("Error connecting to database: %v", err)
+		log.Fatal(err)
+	}
+	db.AutoMigrate(&models.User{}, &models.Profile{})
+	dbGORM = db
+	return dbGORM
+}
+
+func CreateUserGORM(user *models.User) error {
+	return dbGORM.Create(user).Error
+}
+
+func GetUserByIDGORM(id uint) (*models.User, error) {
+	var user models.User
+	if err := dbGORM.Preload("Profile").First(&user, id).Error; err != nil {
 		return nil, err
 	}
-	return db, nil
+	return &user, nil
 }
 
-func AutoMigrate(db *gorm.DB) {
-	db.AutoMigrate(&models.User{})
-	log.Println("Auto migration completed")
+func UpdateUserGORM(user *models.User) error {
+	return dbGORM.Save(user).Error
 }
 
-func CreateUserGorm(db *gorm.DB, name string, age int) {
-	user := models.User{Name: name, Age: age}
-	db.Create(&user)
-	log.Println("User created successfully: ", user)
+func DeleteUserGORM(id uint) error {
+	return dbGORM.Delete(&models.User{}, id).Error
 }
 
-func GetUsersGorm(db *gorm.DB) {
+func GetAllUsersGORM() ([]models.User, error) {
 	var users []models.User
-	db.Find(&users)
-	for _, user := range users {
-		log.Printf("ID: %d, Name: %s, Age: %d\n", user.ID, user.Name, user.Age)
+	if err := dbGORM.Preload("Profile").Find(&users).Error; err != nil {
+		return nil, err
 	}
+	return users, nil
 }
