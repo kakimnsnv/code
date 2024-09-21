@@ -119,3 +119,64 @@ func GetAllUsersSQL() ([]models.User, error) {
 
 	return users, nil
 }
+
+func InsertMultipleUsersSQL(users []models.User) error {
+	tx, err := dbSQL.Begin()
+	if err != nil {
+		return err
+	}
+
+	for _, user := range users {
+		err := tx.QueryRow("INSERT INTO users (name, age) VALUES ($1, $2) RETURNING id", user.Name, user.Age).
+			Scan(&user.ID)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+
+		_, err = tx.Exec("INSERT INTO profiles (user_id, bio, profile_picture_url) VALUES ($1, $2, $3)",
+			user.ID, user.Profile.Bio, user.Profile.ProfilePictureURL)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func GetUsersWithFilterAndPaginationSQL(ageFilter *int, page, pageSize int) ([]models.User, error) {
+	var rows *sql.Rows
+	var err error
+	offset := (page - 1) * pageSize
+
+	if ageFilter != nil {
+		rows, err = dbSQL.Query("SELECT id, name, age FROM users WHERE age = $1 OFFSET $2 LIMIT $3", *ageFilter, offset, pageSize)
+	} else {
+		rows, err = dbSQL.Query("SELECT id, name, age FROM users OFFSET $1 LIMIT $2", offset, pageSize)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []models.User
+	for rows.Next() {
+		var user models.User
+		err := rows.Scan(&user.ID, &user.Name, &user.Age)
+		if err != nil {
+			return nil, err
+		}
+
+		err = dbSQL.QueryRow("SELECT bio, profile_picture_url FROM profiles WHERE user_id=$1", user.ID).
+			Scan(&user.Profile.Bio, &user.Profile.ProfilePictureURL)
+		if err != nil {
+			return nil, err
+		}
+
+		users = append(users, user)
+	}
+
+	return users, nil
+}

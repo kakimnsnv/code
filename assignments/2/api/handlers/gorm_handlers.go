@@ -11,11 +11,39 @@ import (
 )
 
 func GetUsersGORM(w http.ResponseWriter, r *http.Request) {
-	users, err := databases.GetAllUsersGORM()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	pageStr := r.URL.Query().Get("page")
+	pageSizeStr := r.URL.Query().Get("page_size")
+	ageStr := r.URL.Query().Get("age")
+
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		http.Error(w, "Invalid page number", http.StatusBadRequest)
 		return
 	}
+
+	pageSize, err := strconv.Atoi(pageSizeStr)
+	if err != nil || pageSize < 1 {
+		http.Error(w, "Invalid page size", http.StatusBadRequest)
+		return
+	}
+
+	var ageFilter *int
+	if ageStr != "" {
+		age, err := strconv.Atoi(ageStr)
+		if err != nil {
+			http.Error(w, "Invalid age filter", http.StatusBadRequest)
+			return
+		}
+		ageFilter = &age
+	}
+
+	users, err := databases.GetUsersWithFilterAndPaginationGORM(ageFilter, page, pageSize)
+	if err != nil {
+		http.Error(w, "Failed to retrieve users", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(users)
 }
 
@@ -39,6 +67,17 @@ func CreateUserGORM(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	json.NewEncoder(w).Encode(user)
+}
+
+func CreateUsersGORM(w http.ResponseWriter, r *http.Request) {
+	var users []models.User
+	json.NewDecoder(r.Body).Decode(&users)
+	err := databases.InsertMultipleUsersGORM(users)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(users)
 }
 
 func UpdateUserGORM(w http.ResponseWriter, r *http.Request) {

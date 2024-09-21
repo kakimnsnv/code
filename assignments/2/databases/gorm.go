@@ -48,3 +48,30 @@ func GetAllUsersGORM() ([]models.User, error) {
 	}
 	return users, nil
 }
+
+func InsertMultipleUsersGORM(users []models.User) error {
+	tx := dbGORM.Begin()
+	for _, user := range users {
+		if err := tx.Create(&user).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	return tx.Commit().Error
+}
+
+func GetUsersWithFilterAndPaginationGORM(ageFilter *int, page, pageSize int) ([]models.User, error) {
+	var users []models.User
+	query := dbGORM.Preload("Profile")
+
+	if ageFilter != nil {
+		query = query.Where("age = ?", *ageFilter)
+	}
+
+	offset := (page - 1) * pageSize
+	if err := query.Offset(offset).Limit(pageSize).Find(&users).Error; err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
